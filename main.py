@@ -1,11 +1,16 @@
 import time
+import os
 import ccxt  # Ensure you have ccxt imported if you're using it
 from scanner import scan_pairs_for_signals
 from order_executor import execute_trade, place_order
 from risk_manager import check_cooldown, update_drawdown_status, is_in_cooldown, update_after_trade
-from dashboard import update_dashboard
+from dashboard import update_dashboard, generate_dashboard_text, get_last_trade
 from config import TRADE_PAIRS, SCAN_INTERVAL
 from backtest_engine import backtest
+import discord
+from discord.ext import commands
+import asyncio
+from ohlcv_downloader import fetch_ohlcv_to_csv
 
 # Initialize the exchange
 exchange = ccxt.binance({
@@ -52,4 +57,53 @@ def main():
 
 if __name__ == "__main__":
     main()
-    backtest('BTC/USDT')  # Call backtest after main function
+
+# Discord Bot Setup
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Whitelist user (replace with your user ID)
+AUTHORIZED_USERS = [int(os.getenv("DISCORD_ALLOWED_USER_ID"))]
+
+def is_authorized(ctx):
+    return ctx.author.id in AUTHORIZED_USERS
+
+@bot.event
+async def on_ready():
+    print(f"✅ Bot Discord aktif sebagai {bot.user}")
+
+@bot.command()
+async def status(ctx):
+    if not is_authorized(ctx): return
+    msg = generate_dashboard_text()
+    await ctx.send(msg)
+
+@bot.command()
+async def lasttrade(ctx):
+    if not is_authorized(ctx): return
+    last = get_last_trade()
+    if last:
+        await ctx.send(f"🕒 Trade Terakhir:\n{last}")
+    else:
+        await ctx.send("Belum ada histori trade.")
+
+@bot.command()
+async def download(ctx, symbol: str, tf: str, days: int):
+    if not is_authorized(ctx): return
+    await ctx.send(f"📥 Mulai download OHLCV {symbol} ({tf}, {days} hari)...")
+    try:
+        fetch_ohlcv_to_csv(symbol.replace("_", "/"), tf, days)
+        await ctx.send(f"✅ Data {symbol}_{tf} berhasil disimpan!")
+    except Exception as e:
+        await ctx.send(f"❌ Gagal download: {e}")
+
+@bot.command()
+async def backtestcmd(ctx, symbol: str):
+    if not is_authorized(ctx): return
+    await ctx.send(f"⚙️ Mulai backtest {symbol}...")
+    try:
+        backtest(symbol.replace("_", "/"))
+        await ctx.send(f"✅ Backtest selesai. Cek hasil CSV di `/data/backtest_results/{symbol}_backtest.csv`.")
+    except Exception as e:
+        await ctx.send(f"❌ Gagal backtest: {
