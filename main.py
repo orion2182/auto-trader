@@ -1,10 +1,17 @@
 import time
+import ccxt  # Ensure you have ccxt imported if you're using it
 from scanner import scan_pairs_for_signals
 from order_executor import execute_trade, place_order
 from risk_manager import check_cooldown, update_drawdown_status, is_in_cooldown, update_after_trade
 from dashboard import update_dashboard
 from config import TRADE_PAIRS, SCAN_INTERVAL
-import ccxt  # Ensure you have ccxt imported if you're using it
+from backtest_engine import backtest
+
+# Initialize the exchange
+exchange = ccxt.binance({
+    'enableRateLimit': True,
+    'options': {'defaultType': 'future'}
+})
 
 def main():
     print("🚀 Auto Trading Bot Started...")
@@ -45,3 +52,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    backtest('BTC/USDT')  # Call backtest after main function
